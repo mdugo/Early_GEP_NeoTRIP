@@ -1,0 +1,16 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+
+# Data (non versionata)
+data/processed/
+
+# Clinical info
+*.clinical.txt
+
+# Results
+results/
+
+# OS
+.DS_Store
