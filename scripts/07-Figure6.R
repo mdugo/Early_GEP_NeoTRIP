@@ -40,193 +40,193 @@ both <- ExpressionSet(assayData  =  rbind(bltmp, ontmp),
                     phenoData  =  new("AnnotatedDataFrame", pData(scoreSSp)[scoreSSp$Timepoint == "Baseline", ]))
 
 ##### WARNING: REPEATED CV TAKES A LONG TIME TO RUN #####
-# 
-# expList <- list(bl.ct, bl.cta, on.ct, on.cta, both[, both$Arm == "CT"], both[, both$Arm == "CT/A"])
-# names(expList) <- c("Baseline CT", "Baseline CT/A", "D1C2 CT", "D1C2 CT/A", "Both CT", "Both CT/A")
-# 
-# resList <- vector("list", lengt = length(expList))
-# names(resList) <- names(expList)
-# 
-# best_params_list <- vector("list", lengt = length(expList))
-# names(best_params_list) <- names(expList)
-# 
-# # --- GLOBAL PARAMETERS ---
-# n_repeats <- 100
-# n_folds <- 10
-# seed_base <- 123
-# nrounds <- 200
-# 
-# # --- GRID SEARCH ---
-# 
-# param_grid <- expand.grid(
-#   nrounds  =  c(100, 200, 300),
-#   max_depth  =  c(3, 6, 9),
-#   eta  =  c(0.01, 0.1, 0.3),
-#   gamma  =  c(0, 1),
-#   colsample_bytree  =  c(0.6, 0.8, 1),
-#   min_child_weight  =  c(1, 5),
-#   subsample  =  c(0.6, 0.8, 1)
-# )
-# 
-# 
-# # --- EXTERNAL LOOP ITERATING OVER DATASETS ---
-# for (j in 1:length(expList)) {
-#   cat("\n Dataset:", names(expList)[j], "\n")
-# 
-#   data <- t(exprs(expList[[j]]))
-#   label <- expList[[j]]$pCR.num
-# 
-#   # --- GRID SEARCH FOR HYPERPARAMETERS OPTIMIZATION ---
-#   best_auc <- 0
-#   best_params <- NULL
-# 
-#   cat("Hyperparameters optimization...\n")
-#   for (i in 1:nrow(param_grid)) {
-#     params <- param_grid[i, ]
-# 
-#     xgb_cv <- tryCatch({
-#       xgb.cv(
-#         data  =  data,
-#         label  =  label,
-#         nfold  =  5,
-#         nrounds  =  nrounds,
-#         metrics  =  "auc",
-#         objective  =  "binary:logistic",
-#         eta  =  params$eta,
-#         max_depth  =  params$max_depth,
-#         subsample  =  params$subsample,
-#         colsample_bytree  =  params$colsample_bytree,
-#         verbose  =  0,
-#         stratified  =  TRUE,
-#         early_stopping_rounds  =  20
-#       )
-#     }, error  =  function(e) NULL)
-# 
-#     if (!is.null(xgb_cv)) {
-#       mean_auc <- max(xgb_cv$evaluation_log$test_auc_mean)
-#       if (mean_auc > best_auc) {
-#         best_auc <- mean_auc
-#         best_params <- params
-#       }
-#     }
-#   }
-# 
-#   if (is.null(best_params)) {
-#     warning("No valid model for ", names(expList)[j])
-#     next
-#   }
-# 
-#   cat("Optimal hyperparameters found for", names(expList)[j], ":\n")
-#   print(best_params)
-#   cat("Mean AUC:", round(best_auc, 4), "\n")
-# 
-#   best_params_list[[names(expList)[j]]] <- best_params
-# 
-#   # --- PARALLEL REPEATED CV ---
-#   n_cores <- parallel::detectCores() - 1
-#   cl <- makeCluster(n_cores)
-#   registerDoParallel(cl)
-#   cat("Using", n_cores, "cores in parallel\n")
-# 
-#   results_list <- foreach(
-#     iteration  =  1:n_repeats,
-#     .packages  =  c("xgboost", "dplyr"),
-#     .export  =  c("data", "label", "n_folds", "nrounds", "seed_base", "best_params")
-#   ) %dopar% {
-#     set.seed(seed_base + iteration)
-# 
-#     tryCatch({
-#       xgb_cv <- xgb.cv(
-#         data  =  data,
-#         label  =  label,
-#         nfold  =  n_folds,
-#         nrounds  =  nrounds,
-#         metrics  =  c("auc", "error"),
-#         objective  =  "binary:logistic",
-#         eta  =  best_params$eta,
-#         max_depth  =  best_params$max_depth,
-#         subsample  =  best_params$subsample,
-#         colsample_bytree  =  best_params$colsample_bytree,
-#         verbose  =  0,
-#         stratified  =  TRUE,
-#         early_stopping_rounds  =  20
-#       )
-# 
-#       best_iter <- which.max(xgb_cv$evaluation_log$test_auc_mean)
-#       best_auc <- xgb_cv$evaluation_log$test_auc_mean[best_iter]
-#       best_acc <- 1 - xgb_cv$evaluation_log$test_error_mean[best_iter]
-# 
-#       # Final model to extract feature importance
-#       xgb_model <- xgboost(
-#         data  =  data,
-#         label  =  label,
-#         nrounds  =  best_iter,
-#         eta  =  best_params$eta,
-#         max_depth  =  best_params$max_depth,
-#         subsample  =  best_params$subsample,
-#         colsample_bytree  =  best_params$colsample_bytree,
-#         objective  =  "binary:logistic",
-#         verbose  =  0,
-#         nthread  =  1
-#       )
-# 
-#       importance_matrix <- xgb.importance(feature_names  =  colnames(data), model  =  xgb_model)
-# 
-#       list(
-#         iteration  =  iteration,
-#         accuracy  =  best_acc,
-#         auc  =  best_auc,
-#         importance  =  importance_matrix
-#       )
-#     }, error  =  function(e) {
-#       list(iteration  =  iteration, accuracy  =  NA, auc  =  NA, importance  =  NULL)
-#     })
-#   }
-# 
-#   stopCluster(cl)
-# 
-#   # --- RESULTS LIST ---
-#   results <- bind_rows(lapply(results_list, function(x)
-#     data.frame(iteration  =  x$iteration, accuracy  =  x$accuracy, auc  =  x$auc)))
-#   results$dataset <- names(expList)[j]
-# 
-#   feature_importance_list <- lapply(results_list, function(x) x$importance)
-#   feature_importance_list <- feature_importance_list[!sapply(feature_importance_list, is.null)]
-# 
-#   summary_results <- results %>%
-#     filter(!is.na(accuracy)) %>%
-#     summarise(
-#       mean_accuracy  =  mean(accuracy),
-#       sd_accuracy  =  sd(accuracy),
-#       mean_auc  =  mean(auc),
-#       sd_auc  =  sd(auc)
-#     ) %>%
-#     mutate(dataset  =  names(expList)[j])
-# 
-#   if (length(feature_importance_list) > 0) {
-#     importance_df <- bind_rows(feature_importance_list, .id  =  "iteration")
-#     importance_df$dataset <- names(expList)[j]
-# 
-#     mean_importance <- importance_df %>%
-#       group_by(Feature) %>%
-#       summarise(
-#         meanGain  =  mean(Gain, na.rm  =  TRUE),
-#         stdvGain  =  sd(Gain, na.rm  =  TRUE),
-#         meanCover  =  mean(Cover, na.rm  =  TRUE),
-#         meanFrequency  =  mean(Frequency, na.rm  =  TRUE)
-#       ) %>%
-#       arrange(desc(meanGain)) %>%
-#       mutate(dataset  =  names(expList)[j])
-#   }
-# 
-#   # --- SAVE IN LIST ---
-#   resList[[j]]$results <- results
-#   resList[[j]]$summary_results <- summary_results
-#   resList[[j]]$importance_df <- importance_df
-#   resList[[j]]$mean_importance <- mean_importance
-# }
-# save(resList, best_params_list, file = file.path(here::here("results"), "06-XGBoost_repeatedCV_results.RData"))
-# 
+
+expList <- list(bl.ct, bl.cta, on.ct, on.cta, both[, both$Arm == "CT"], both[, both$Arm == "CT/A"])
+names(expList) <- c("Baseline CT", "Baseline CT/A", "D1C2 CT", "D1C2 CT/A", "Both CT", "Both CT/A")
+
+resList <- vector("list", lengt = length(expList))
+names(resList) <- names(expList)
+
+best_params_list <- vector("list", lengt = length(expList))
+names(best_params_list) <- names(expList)
+
+# --- GLOBAL PARAMETERS ---
+n_repeats <- 100
+n_folds <- 10
+seed_base <- 123
+nrounds <- 200
+
+# --- GRID SEARCH ---
+
+param_grid <- expand.grid(
+  nrounds  =  c(100, 200, 300),
+  max_depth  =  c(3, 6, 9),
+  eta  =  c(0.01, 0.1, 0.3),
+  gamma  =  c(0, 1),
+  colsample_bytree  =  c(0.6, 0.8, 1),
+  min_child_weight  =  c(1, 5),
+  subsample  =  c(0.6, 0.8, 1)
+)
+
+
+# --- EXTERNAL LOOP ITERATING OVER DATASETS ---
+for (j in 1:length(expList)) {
+  cat("\n Dataset:", names(expList)[j], "\n")
+
+  data <- t(exprs(expList[[j]]))
+  label <- expList[[j]]$pCR.num
+
+  # --- GRID SEARCH FOR HYPERPARAMETERS OPTIMIZATION ---
+  best_auc <- 0
+  best_params <- NULL
+
+  cat("Hyperparameters optimization...\n")
+  for (i in 1:nrow(param_grid)) {
+    params <- param_grid[i, ]
+
+    xgb_cv <- tryCatch({
+      xgb.cv(
+        data  =  data,
+        label  =  label,
+        nfold  =  5,
+        nrounds  =  nrounds,
+        metrics  =  "auc",
+        objective  =  "binary:logistic",
+        eta  =  params$eta,
+        max_depth  =  params$max_depth,
+        subsample  =  params$subsample,
+        colsample_bytree  =  params$colsample_bytree,
+        verbose  =  0,
+        stratified  =  TRUE,
+        early_stopping_rounds  =  20
+      )
+    }, error  =  function(e) NULL)
+
+    if (!is.null(xgb_cv)) {
+      mean_auc <- max(xgb_cv$evaluation_log$test_auc_mean)
+      if (mean_auc > best_auc) {
+        best_auc <- mean_auc
+        best_params <- params
+      }
+    }
+  }
+
+  if (is.null(best_params)) {
+    warning("No valid model for ", names(expList)[j])
+    next
+  }
+
+  cat("Optimal hyperparameters found for", names(expList)[j], ":\n")
+  print(best_params)
+  cat("Mean AUC:", round(best_auc, 4), "\n")
+
+  best_params_list[[names(expList)[j]]] <- best_params
+
+  # --- PARALLEL REPEATED CV ---
+  n_cores <- parallel::detectCores() - 1
+  cl <- makeCluster(n_cores)
+  registerDoParallel(cl)
+  cat("Using", n_cores, "cores in parallel\n")
+
+  results_list <- foreach(
+    iteration  =  1:n_repeats,
+    .packages  =  c("xgboost", "dplyr"),
+    .export  =  c("data", "label", "n_folds", "nrounds", "seed_base", "best_params")
+  ) %dopar% {
+    set.seed(seed_base + iteration)
+
+    tryCatch({
+      xgb_cv <- xgb.cv(
+        data  =  data,
+        label  =  label,
+        nfold  =  n_folds,
+        nrounds  =  nrounds,
+        metrics  =  c("auc", "error"),
+        objective  =  "binary:logistic",
+        eta  =  best_params$eta,
+        max_depth  =  best_params$max_depth,
+        subsample  =  best_params$subsample,
+        colsample_bytree  =  best_params$colsample_bytree,
+        verbose  =  0,
+        stratified  =  TRUE,
+        early_stopping_rounds  =  20
+      )
+
+      best_iter <- which.max(xgb_cv$evaluation_log$test_auc_mean)
+      best_auc <- xgb_cv$evaluation_log$test_auc_mean[best_iter]
+      best_acc <- 1 - xgb_cv$evaluation_log$test_error_mean[best_iter]
+
+      # Final model to extract feature importance
+      xgb_model <- xgboost(
+        data  =  data,
+        label  =  label,
+        nrounds  =  best_iter,
+        eta  =  best_params$eta,
+        max_depth  =  best_params$max_depth,
+        subsample  =  best_params$subsample,
+        colsample_bytree  =  best_params$colsample_bytree,
+        objective  =  "binary:logistic",
+        verbose  =  0,
+        nthread  =  1
+      )
+
+      importance_matrix <- xgb.importance(feature_names  =  colnames(data), model  =  xgb_model)
+
+      list(
+        iteration  =  iteration,
+        accuracy  =  best_acc,
+        auc  =  best_auc,
+        importance  =  importance_matrix
+      )
+    }, error  =  function(e) {
+      list(iteration  =  iteration, accuracy  =  NA, auc  =  NA, importance  =  NULL)
+    })
+  }
+
+  stopCluster(cl)
+
+  # --- RESULTS LIST ---
+  results <- bind_rows(lapply(results_list, function(x)
+    data.frame(iteration  =  x$iteration, accuracy  =  x$accuracy, auc  =  x$auc)))
+  results$dataset <- names(expList)[j]
+
+  feature_importance_list <- lapply(results_list, function(x) x$importance)
+  feature_importance_list <- feature_importance_list[!sapply(feature_importance_list, is.null)]
+
+  summary_results <- results %>%
+    filter(!is.na(accuracy)) %>%
+    summarise(
+      mean_accuracy  =  mean(accuracy),
+      sd_accuracy  =  sd(accuracy),
+      mean_auc  =  mean(auc),
+      sd_auc  =  sd(auc)
+    ) %>%
+    mutate(dataset  =  names(expList)[j])
+
+  if (length(feature_importance_list) > 0) {
+    importance_df <- bind_rows(feature_importance_list, .id  =  "iteration")
+    importance_df$dataset <- names(expList)[j]
+
+    mean_importance <- importance_df %>%
+      group_by(Feature) %>%
+      summarise(
+        meanGain  =  mean(Gain, na.rm  =  TRUE),
+        stdvGain  =  sd(Gain, na.rm  =  TRUE),
+        meanCover  =  mean(Cover, na.rm  =  TRUE),
+        meanFrequency  =  mean(Frequency, na.rm  =  TRUE)
+      ) %>%
+      arrange(desc(meanGain)) %>%
+      mutate(dataset  =  names(expList)[j])
+  }
+
+  # --- SAVE IN LIST ---
+  resList[[j]]$results <- results
+  resList[[j]]$summary_results <- summary_results
+  resList[[j]]$importance_df <- importance_df
+  resList[[j]]$mean_importance <- mean_importance
+}
+save(resList, best_params_list, file = file.path(here::here("results"), "06-XGBoost_repeatedCV_results.RData"))
+
 
 #**********************************************
 #* Panel A
