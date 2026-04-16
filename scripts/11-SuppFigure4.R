@@ -4,7 +4,7 @@ library(ggpubr)
 library(rcartocolor)
 library(cowplot)
 library(Biobase)
-source(file.path(here::here("scripts"), "02-helper_functions.R"))
+source(file.path(here::here("scripts"), "00a-helper_functions.R"))
 
 data_dir <- here::here("data", "processed")
 

@@ -7,7 +7,7 @@
 data/processed/
 
 # Clinical info
-*.clinical.txt
+data/*.clinical.txt
 
 # Results
 results/

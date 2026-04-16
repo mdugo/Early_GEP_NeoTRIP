@@ -9,7 +9,7 @@ library(rcartocolor)
 library(ComplexHeatmap)
 library(circlize)
 library(RColorBrewer)
-source(file.path(here::here("scripts"), "02-helper_functions.R"))
+source(file.path(here::here("scripts"), "00a-helper_functions.R"))
 
 data_dir <- here::here("data", "processed")
 

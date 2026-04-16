@@ -12,7 +12,7 @@ library(RColorBrewer)
 library(showtext)
 library(colorspace)
 library(here)
-source(file.path(here("scripts"), "02-helper_functions.R"))
+source(file.path(here("scripts"), "00a-helper_functions.R"))
 
 data_dir <- here("data", "processed")
 

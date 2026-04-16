@@ -19,15 +19,15 @@ library(singscore)
 
 data_dir <- here::here("data", "processed")
 
-# expData <- read.table(file.path(data_dir, "NeoTRIP_baseline_D1C2_TPM_ComBat_all_samples.txt"),
-#                       header = T,
-#                       sep = "\t",
-#                       as.is = T)
-# rownames(expData) <- expData$HGNC_approved_symbol
-# expData <- expData[, -c(1:3)]
-# ref = InstaPrism_reference('BRCA')
-# deconv_tpm = InstaPrism(bulk_Expr = expData, refPhi_cs = ref)
-# save(deconv_tpm, file=file.path(data_dir, "instaprism_deconvolution.RData"))
+expData <- read.table(file.path(data_dir, "NeoTRIP_baseline_D1C2_TPM_ComBat_all_samples.txt"),
+                      header = T,
+                      sep = "\t",
+                      as.is = T)
+rownames(expData) <- expData$HGNC_approved_symbol
+expData <- expData[, -c(1:3)]
+ref = InstaPrism_reference('BRCA')
+deconv_tpm = InstaPrism(bulk_Expr = expData, refPhi_cs = ref)
+save(deconv_tpm, file=file.path(data_dir, "instaprism_deconvolution.RData"))
 
 
 
